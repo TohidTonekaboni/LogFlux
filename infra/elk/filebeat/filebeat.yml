@@ -1,0 +1,33 @@
+# Autodiscovers every container on this host and ships its stdout/stderr logs to
+# Logstash — no per-service logging config needed as go-backend/python-backend
+# are added later (documents/backend.md §6).
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+      # Filebeat 8.15's built-in default hint template references
+      # `kubernetes.container.id` even under the docker provider (upstream quirk),
+      # so the auto-generated default never resolves and no input gets created.
+      # Supplying our own default_config, using the docker bus event's actual
+      # field (`container.id`, confirmed via `filebeat -d autodiscover,docker`),
+      # works around it.
+      hints.default_config:
+        type: container
+        paths:
+          - "/var/lib/docker/containers/${data.container.id}/*.log"
+
+processors:
+  - add_docker_metadata:
+      host: "unix:///var/run/docker.sock"
+  # Don't ship the ELK stack's own containers back into itself — Logstash
+  # ingesting its own stack traces created a self-reinforcing OOM loop the
+  # first time this ran (crash -> traces logged -> traces re-ingested ->
+  # more load -> more crashes). Only app/infra service logs are in scope
+  # here (documents/backend.md §6), not the log pipeline's own internals.
+  - drop_event:
+      when:
+        regexp:
+          container.image.name: "^elastic/"
+
+output.logstash:
+  hosts: ["logstash:5044"]

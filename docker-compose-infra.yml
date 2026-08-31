@@ -1,0 +1,114 @@
+
+x-mem-limit: &mem-limit
+  deploy:
+    resources:
+      limits:
+        memory: 2G
+
+networks:
+  log_flux_net:
+    driver: bridge
+
+volumes:
+  es_data_log_flux:
+services:
+  # ---------------------------------------------------------------------------
+  # ELK 
+  # xpack security is ON (auth required) but TLS is left off for local/dev
+  # simplicity — add TLS before using this stack anywhere reachable outside a
+  # trusted network. 
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    <<: *mem-limit
+    image: elastic/elasticsearch:8.15.0
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.http.ssl.enabled: "false"
+      xpack.security.transport.ssl.enabled: "false"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      ES_JAVA_OPTS: ${ES_JAVA_OPTS}
+    volumes:
+      - es_data_log_flux:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:$$ELASTIC_PASSWORD http://localhost:9200/_cluster/health | grep -q '\"status\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - log_flux_net
+
+  # One-shot job: sets the kibana_system password and creates the 'ai_fashion'
+  # login (superuser role — this is a single-tenant dev/admin account, same
+  # broad-access pattern as POSTGRES_USER/MINIO_ROOT_USER in this stack; scope
+  # it down to a custom role before sharing this environment).
+  es-setup:
+    <<: *mem-limit
+    image: curlimages/curl:8.10.1
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+      KIBANA_SYSTEM_PASSWORD: ${KIBANA_SYSTEM_PASSWORD}
+      ES_USER: ${ES_USER}
+      ES_PASSWORD: ${ES_PASSWORD}
+    volumes:
+      - ./infra/elk/es-setup/es-setup.sh:/es-setup.sh:ro
+    entrypoint: ["/bin/sh", "/es-setup.sh"]
+    networks:
+      - log_flux_net
+
+  logstash:
+    <<: *mem-limit
+    image: elastic/logstash:8.15.0
+    restart: unless-stopped
+    environment:
+      LS_JAVA_OPTS: ${LOGSTASH_JAVA_OPTS}
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./infra/elk/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./infra/elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - log_flux_net
+
+  kibana:
+    <<: *mem-limit
+    image: elastic/kibana:8.15.0
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: kibana_system
+      ELASTICSEARCH_PASSWORD: ${KIBANA_SYSTEM_PASSWORD}
+    ports:
+      - "5601:5601"
+    depends_on:
+      es-setup:
+        condition: service_completed_successfully
+    networks:
+      - log_flux_net
+
+  filebeat:
+    <<: *mem-limit
+    image: elastic/filebeat:8.15.0
+    restart: unless-stopped
+    user: root
+    # --strict.perms=false: bind-mounted config files fail Filebeat's ownership
+    # check in dev; for prod, bake filebeat.yml into a custom image (root:600) instead.
+    # -e: log to stderr so `docker logs`/`docker compose logs` show output —
+    # this command overrides the image's default CMD, which otherwise enables it.
+    command: ["-e", "--strict.perms=false"]
+    volumes:
+      - ./infra/elk/filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - logstash
+    networks:
+      - log_flux_net
