@@ -120,6 +120,28 @@ flowchart LR
 - Tracks and exposes **consumer lag** and **bulk indexing latency/error rate** as Prometheus metrics.
 - On repeated indexing failure for a batch, routes offending records to `logs.dlq` rather than blocking the partition.
 
+#### 3.4.1 Internal Pipeline (channels + worker pools)
+
+To index high log volume without the Kafka fetch loop stalling, the consumer is a staged pipeline connected by bounded Go channels, each stage running its own pool of goroutines:
+
+```mermaid
+flowchart LR
+    KP1[Partition Reader] -->|recordsCh| NW[Normalize Workers]
+    KP2[Partition Reader] -->|recordsCh| NW
+    NW -->|batchCh| BW[Batcher]
+    BW -->|bulkCh| IW[Bulk Indexer Workers]
+    IW -->|success| ES[(Elasticsearch)]
+    IW -->|repeated failure| DLQ[DLQ Publisher] --> DLQT[logs.dlq]
+```
+
+- **Partition Readers**: one goroutine per Kafka partition assigned to this consumer instance, each writing to its own bounded `recordsCh`. Keeping a channel per partition preserves per-service ordering (topic is partitioned by `service_name`, §3.3) even though normalization and indexing happen concurrently across partitions.
+- **Normalize Workers**: a fixed-size pool (configurable, e.g. `NORMALIZE_WORKERS`) fanning in from all `recordsCh`s via `select`, applying field renaming/level standardization, and pushing onto a shared `batchCh`.
+- **Batcher**: accumulates records into batches by size or a flush-interval timeout, then sends complete batches on `bulkCh`. Batching here (rather than per-record) is what makes the ES `_bulk` API worthwhile at high throughput.
+- **Bulk Indexer Workers**: a pool (configurable, e.g. `INDEXER_WORKERS`) reading `bulkCh` and performing `_bulk` writes in parallel; each worker retries with backoff, then routes the batch to a `dlqCh` on repeated failure so one bad batch never blocks the pipeline.
+- **DLQ Publisher**: a single goroutine draining `dlqCh` and publishing to `logs.dlq`, decoupling failure handling from the indexing hot path.
+- **Backpressure**: every channel is bounded (capacity is a tuning knob, not unlimited). If Elasticsearch slows down, `bulkCh`/`batchCh` fill up, which blocks `recordsCh` sends, which blocks the partition readers' `Fetch`/consume calls — surfacing as Kafka consumer lag (per §5) instead of unbounded memory growth.
+- Kafka offsets are committed only after a batch is successfully indexed (or routed to DLQ), preserving at-least-once delivery per partition.
+
 ### 3.5 Storage: Elasticsearch
 
 - Index pattern `logs-YYYY.MM.DD` (daily indices) to make retention/deletion cheap.
@@ -197,8 +219,8 @@ message StreamAck {
 
 ## 5. Scalability & Reliability Considerations
 
-- **Horizontal scaling**: ingestion servers and consumer instances are stateless and scale independently; Kafka partition count bounds consumer parallelism, so choose partition count with expected peak load in mind.
-- **Backpressure**: if Elasticsearch slows down, Kafka absorbs the burst; consumer lag becomes the visible signal (surfaced in Grafana) rather than data loss.
+- **Horizontal scaling**: ingestion servers and consumer instances are stateless and scale independently; Kafka partition count bounds consumer parallelism, so choose partition count with expected peak load in mind. Within a single consumer instance, the normalize-worker and bulk-indexer pool sizes (§3.4.1) are additional parallelism knobs for scaling up throughput on a fixed partition count.
+- **Backpressure**: if Elasticsearch slows down, the consumer's bounded internal channels (§3.4.1) fill up and stall partition reads, which stalls Kafka fetch — Kafka absorbs the burst; consumer lag becomes the visible signal (surfaced in Grafana) rather than data loss or unbounded memory growth.
 - **At-least-once delivery**: acceptable for logs; consumer writes should be idempotent where feasible (e.g., deterministic document IDs from trace_id + timestamp) to reduce duplicate risk on retries.
 - **Failure isolation**: a malformed batch goes to `logs.dlq` instead of blocking the partition.
 
