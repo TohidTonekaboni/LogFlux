@@ -13,6 +13,8 @@ volumes:
   es_data_log_flux:
   kafka_1_data:
   kafka_2_data:
+  prometheus_data:
+  grafana_data:
 services:
   # ---------------------------------------------------------------------------
   # ELK 
@@ -203,5 +205,70 @@ services:
         condition: service_healthy
       kafka-2:
         condition: service_healthy
+    networks:
+      - log_flux_net
+
+  # ---------------------------------------------------------------------------
+  # Monitoring — Prometheus scrapes cluster-health exporters for Kafka and
+  # Elasticsearch (per-service Go app metrics get their own scrape targets
+  # once those services exist); Grafana visualizes it, with Prometheus
+  # pre-provisioned as its datasource.
+  # ---------------------------------------------------------------------------
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:latest
+    restart: unless-stopped
+    command:
+      - "--kafka.server=kafka-1:9092"
+      - "--kafka.server=kafka-2:9092"
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+    networks:
+      - log_flux_net
+
+  elasticsearch-exporter:
+    image: prometheuscommunity/elasticsearch-exporter:latest
+    restart: unless-stopped
+    command:
+      - "--es.uri=http://${ES_USER}:${ES_PASSWORD}@elasticsearch:9200"
+      - "--es.all"
+      - "--es.indices"
+    depends_on:
+      es-setup:
+        condition: service_completed_successfully
+    networks:
+      - log_flux_net
+
+  prometheus:
+    <<: *mem-limit
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - kafka-exporter
+      - elasticsearch-exporter
+    networks:
+      - log_flux_net
+
+  grafana:
+    <<: *mem-limit
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
     networks:
       - log_flux_net
