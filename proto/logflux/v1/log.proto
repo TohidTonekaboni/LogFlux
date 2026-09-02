@@ -1,0 +1,33 @@
+syntax = "proto3";
+package logflux.v1;
+
+option go_package = "github.com/TohidTonekaboni/LogFlux/proto/logflux/v1;logfluxv1";
+
+message LogEntry {
+  string service_name   = 1;
+  string environment     = 2;
+  int64  timestamp_unix_ms = 3;
+  Level  level           = 4;
+  string message         = 5;
+  string trace_id        = 6;
+  map<string, string> fields = 7; // arbitrary structured metadata
+}
+
+enum Level {
+  LEVEL_UNSPECIFIED = 0;
+  DEBUG = 1;
+  INFO  = 2;
+  WARN  = 3;
+  ERROR = 4;
+  FATAL = 5;
+}
+
+service LogIngest {
+  // Client-streaming: agent pushes a continuous stream of entries.
+  rpc StreamLogs(stream LogEntry) returns (StreamAck);
+}
+
+message StreamAck {
+  int64 accepted_count = 1;
+  int64 rejected_count = 2;
+}
