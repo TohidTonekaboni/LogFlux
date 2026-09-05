@@ -24,7 +24,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("logflux agent: %v", err)
 	}
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			log.Printf("logflux agent: close: %v", err)
+		}
+	}()
 
 	go func() {
 		ticker := time.NewTicker(200 * time.Millisecond)
