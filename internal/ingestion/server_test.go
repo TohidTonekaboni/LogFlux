@@ -30,7 +30,7 @@ func dialServer(t *testing.T, sink Sink) logfluxv1.LogIngestClient {
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
-	t.Cleanup(func() { _ = conn.Close() })
+	t.Cleanup(func() { conn.Close() })
 
 	return logfluxv1.NewLogIngestClient(conn)
 }
