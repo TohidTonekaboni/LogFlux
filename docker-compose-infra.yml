@@ -204,6 +204,12 @@ services:
           --partitions 6 \
           --replication-factor 2 \
           --config retention.ms=172800000
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka-1:9092 \
+                  --create --if-not-exists \
+                  --topic logs.dlq \
+                  --partitions 3 \
+                  --replication-factor 2 \
+                  --config retention.ms=604800000
     depends_on:
       kafka-1:
         condition: service_healthy
