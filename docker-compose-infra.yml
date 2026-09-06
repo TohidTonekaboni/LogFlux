@@ -97,6 +97,19 @@ services:
         condition: service_completed_successfully
     networks:
       - log_flux_net
+  kibana-setup:
+    image: curlimages/curl:8.10.1
+    depends_on:
+      kibana:
+        condition: service_started
+    environment:
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD}
+    volumes:
+      - ./infra/elk/kibana-setup/kibana-setup.sh:/kibana-setup.sh:ro
+      - ./infra/elk/kibana-setup/saved_objects.ndjson:/saved_objects.ndjson:ro
+    entrypoint: [ "/bin/sh", "/kibana-setup.sh" ]
+    networks:
+      - log_flux_net
 
   filebeat:
     <<: *mem-limit
