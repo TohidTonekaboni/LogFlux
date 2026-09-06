@@ -4,8 +4,12 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
+	"github.com/TohidTonekaboni/LogFlux/internal/kafka"
+	"github.com/TohidTonekaboni/LogFlux/internal/metrics"
 	logfluxv1 "github.com/TohidTonekaboni/LogFlux/proto/logflux/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 // Sink is where a validated LogEntry goes after StreamLogs accepts it.
@@ -20,6 +24,27 @@ type LogSink struct{}
 func (LogSink) Publish(_ context.Context, entry *logfluxv1.LogEntry) error {
 	log.Printf("logflux: %s [%s] %s", entry.GetServiceName(), entry.GetLevel(), entry.GetMessage())
 	return nil
+}
+
+// KafkaSink publishes entries to Kafka via a Producer, keyed by service name.
+type KafkaSink struct {
+	producer *kafka.Producer
+}
+
+func NewKafkaSink(producer *kafka.Producer) *KafkaSink {
+	return &KafkaSink{producer: producer}
+}
+
+func (s *KafkaSink) Publish(ctx context.Context, entry *logfluxv1.LogEntry) error {
+	value, err := proto.Marshal(entry)
+	if err != nil {
+		return err
+	}
+
+	start := time.Now()
+	err = s.producer.Publish(ctx, entry.GetServiceName(), value)
+	metrics.KafkaPublishDuration.Observe(time.Since(start).Seconds())
+	return err
 }
 
 // MemorySink buffers entries in memory; used by tests to assert on what the
