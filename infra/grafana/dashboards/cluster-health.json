@@ -1,0 +1,42 @@
+{
+  "uid": "logflux-cluster-health",
+  "title": "LogFlux / Cluster Health",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "title": "Kafka brokers up", "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "kafka_brokers", "legendFormat": "brokers" }]
+    },
+    {
+      "id": 2, "title": "Elasticsearch cluster status", "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "unknown" } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }] }
+        },
+        "overrides": []
+      },
+      "targets": [{ "expr": "sum(elasticsearch_cluster_health_status{color=\"green\"} * 2 + elasticsearch_cluster_health_status{color=\"yellow\"} * 1)", "legendFormat": "status" }]
+    },
+    {
+      "id": 3, "title": "Elasticsearch nodes", "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 8, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "elasticsearch_cluster_health_number_of_nodes", "legendFormat": "nodes" }]
+    },
+    {
+      "id": 4, "title": "Active shards %", "type": "gauge",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100 }, "overrides": [] },
+      "targets": [{ "expr": "elasticsearch_cluster_health_active_shards_percent_as_number", "legendFormat": "active shards" }]
+    }
+  ]
+}

@@ -7,8 +7,8 @@ import (
 
 var (
 	LogsReceivedTotal = promauto.NewCounter(prometheus.CounterOpts{
-		Name : "logs_received_total",
-		Help : "Total number of log entries accepted by the ingestion server.",
+		Name: "logs_received_total",
+		Help: "Total number of log entries accepted by the ingestion server.",
 	})
 	LogsRejectedTotal = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "logs_rejected_total",
@@ -44,4 +44,15 @@ var (
 		Name: "consumer_lag",
 		Help: "Number of messages the consumer group is behind on logs.raw.",
 	})
+
+	HTTPRequestsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "http_requests_total",
+		Help: "Total number of REST API requests.",
+	}, []string{"method", "path", "status"})
+
+	HTTPRequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "http_request_duration_seconds",
+		Help:    "Latency of REST API requests.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"method", "path"})
 )

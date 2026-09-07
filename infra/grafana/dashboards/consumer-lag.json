@@ -1,0 +1,35 @@
+{
+  "uid": "logflux-consumer-lag",
+  "title": "LogFlux / Consumer Lag",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "title": "Kafka consumer lag", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "consumer_lag", "legendFormat": "lag" }]
+    },
+    {
+      "id": 2, "title": "Logs indexed/sec", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(logs_indexed_total[1m])", "legendFormat": "indexed" }]
+    },
+    {
+      "id": 3, "title": "Bulk index errors/sec (-> DLQ)", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(bulk_index_errors_total[1m])", "legendFormat": "errors" }]
+    },
+    {
+      "id": 4, "title": "Bulk index latency (p95)", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(bulk_index_duration_seconds_bucket[5m]))", "legendFormat": "p95" }]
+    }
+  ]
+}

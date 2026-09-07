@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/TohidTonekaboni/LogFlux/internal/esclient"
+	"github.com/TohidTonekaboni/LogFlux/internal/metrics"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -28,12 +29,27 @@ func New(es LogSearcher) *API {
 
 func (a *API) Routes() *gin.Engine {
 	r := gin.Default()
+	r.Use(metricsMiddleware())
 	r.GET("/healthz", a.healthz)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.GET("/logs", a.listLogs)
 	r.GET("/logs/:id", a.getLog)
 	r.GET("/services", a.listServices)
 	return r
+}
+
+func metricsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		path := c.FullPath()
+		if path == "" {
+			path = "unmatched"
+		}
+		metrics.HTTPRequestDuration.WithLabelValues(c.Request.Method, path).Observe(time.Since(start).Seconds())
+		metrics.HTTPRequestsTotal.WithLabelValues(c.Request.Method, path, strconv.Itoa(c.Writer.Status())).Inc()
+	}
 }
 
 func (a *API) healthz(c *gin.Context) {

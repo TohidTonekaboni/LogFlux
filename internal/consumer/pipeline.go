@@ -7,8 +7,8 @@ import (
 
 	"github.com/TohidTonekaboni/LogFlux/internal/metrics"
 	logfluxv1 "github.com/TohidTonekaboni/LogFlux/proto/logflux/v1"
-	"github.com/golang/protobuf/proto"
 	kafkago "github.com/segmentio/kafka-go"
+	"google.golang.org/protobuf/proto"
 )
 
 type Config struct {

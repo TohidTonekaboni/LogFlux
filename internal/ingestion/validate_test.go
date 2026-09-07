@@ -7,10 +7,6 @@ import (
 )
 
 func TestValidate(t *testing.T) {
-	var ErrMissingServiceName error
-	var ErrMissingTimestamp error
-	var ErrMissingLevel error
-	var ErrMissingMessage error
 	tests := []struct {
 		name    string
 		entry   *logfluxv1.LogEntry

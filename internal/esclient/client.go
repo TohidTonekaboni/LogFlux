@@ -87,7 +87,7 @@ func (c *Client) BulkIndex(ctx context.Context, entries []*logfluxv1.LogEntry) e
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.IsError() {
 		return fmt.Errorf("bulk request failed: %s", res.String())

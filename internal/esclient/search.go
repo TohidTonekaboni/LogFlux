@@ -82,7 +82,7 @@ func (c *Client) SearchLogs(ctx context.Context, q LogQuery) ([]LogHit, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.IsError() {
 		return nil, fmt.Errorf("search failed: %s", res.String())
@@ -108,7 +108,7 @@ func (c *Client) GetLogByID(ctx context.Context, id string) (*LogHit, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.IsError() {
 		return nil, fmt.Errorf("search failed: %s", res.String())
@@ -145,7 +145,7 @@ func (c *Client) ListServices(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	if res.IsError() {
 		return nil, fmt.Errorf("aggregation failed: %s", res.String())

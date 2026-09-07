@@ -22,7 +22,6 @@ func NewProducer(brokers []string, topic string) *Producer {
 	}
 }
 
-
 func (p *Producer) Publish(ctx context.Context, key string, value []byte) error {
 	return p.writer.WriteMessages(ctx, kafka.Message{
 		Key:   []byte(key),

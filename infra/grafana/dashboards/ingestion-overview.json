@@ -1,0 +1,35 @@
+{
+  "uid": "logflux-ingestion-overview",
+  "title": "LogFlux / Ingestion Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "title": "Logs received/sec", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(logs_received_total[1m])", "legendFormat": "received" }]
+    },
+    {
+      "id": 2, "title": "Logs rejected/sec", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "rate(logs_rejected_total[1m])", "legendFormat": "rejected" }]
+    },
+    {
+      "id": 3, "title": "Active gRPC streams", "type": "stat",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [{ "expr": "grpc_stream_active_connections", "legendFormat": "streams" }]
+    },
+    {
+      "id": 4, "title": "Kafka publish latency (p95)", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(kafka_publish_duration_seconds_bucket[5m]))", "legendFormat": "p95" }]
+    }
+  ]
+}

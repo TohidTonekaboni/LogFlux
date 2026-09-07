@@ -5,7 +5,6 @@ go 1.27.0
 require (
 	github.com/elastic/go-elasticsearch/v8 v8.19.7
 	github.com/gin-gonic/gin v1.12.0
-	github.com/golang/protobuf v1.5.4
 	github.com/prometheus/client_golang v1.24.1
 	github.com/segmentio/kafka-go v0.4.51
 	google.golang.org/grpc v1.83.2
