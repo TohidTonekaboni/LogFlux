@@ -1,0 +1,7 @@
+.git
+.github
+.idea
+.env
+*.md
+infra
+docker-compose*.yml

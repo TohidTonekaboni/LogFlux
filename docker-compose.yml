@@ -1,0 +1,93 @@
+include:
+  - docker-compose-infra.yml
+
+services:
+  ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingestion
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: kafka-1:9092,kafka-2:9092
+    ports:
+      - "9000:9000"
+      - "2112:2112"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2112/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-topics-init:
+        condition: service_completed_successfully
+    networks:
+      - log_flux_net
+
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile.consumer
+    restart: unless-stopped
+    environment:
+      KAFKA_BROKERS: kafka-1:9092,kafka-2:9092
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ES_USER: ${ES_USER}
+      ES_PASSWORD: ${ES_PASSWORD}
+    ports:
+      - "2113:2113"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2113/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-topics-init:
+        condition: service_completed_successfully
+      es-setup:
+        condition: service_completed_successfully
+    networks:
+      - log_flux_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ES_USER: ${ES_USER}
+      ES_PASSWORD: ${ES_PASSWORD}
+      API_PORT: "8081"
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      es-setup:
+        condition: service_completed_successfully
+    networks:
+      - log_flux_net
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    restart: unless-stopped
+    environment:
+      INGESTION_ADDR: ingestion:9000
+    depends_on:
+      ingestion:
+        condition: service_healthy
+    networks:
+      - log_flux_net

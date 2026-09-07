@@ -15,19 +15,16 @@ scrape_configs:
     static_configs:
       - targets: ["elasticsearch-exporter:9114"]
 
-  # ingestion/consumer/api aren't containerized yet (Phase 6), so they run on
-  # the host while Prometheus runs inside the compose network -- reach back
-  # out via host.docker.internal (works on Docker Desktop out of the box; a
-  # native Linux host needs prometheus's extra_hosts entry in
-  # docker-compose-infra.yml, already added for portability).
+  # ingestion/consumer/api are containerized (docker-compose.yml, Phase 6)
+  # and share this compose network, so they're reachable by service name.
   - job_name: logflux-ingestion
     static_configs:
-      - targets: ["host.docker.internal:2112"]
+      - targets: ["ingestion:2112"]
 
   - job_name: logflux-consumer
     static_configs:
-      - targets: ["host.docker.internal:2113"]
+      - targets: ["consumer:2113"]
 
   - job_name: logflux-api
     static_configs:
-      - targets: ["host.docker.internal:8081"]
+      - targets: ["api:8081"]

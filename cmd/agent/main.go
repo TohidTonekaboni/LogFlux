@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -16,7 +17,7 @@ func main() {
 	defer stop()
 
 	client, err := agent.New(agent.Config{
-		ServerAddr:    "localhost:9000",
+		ServerAddr:    getEnv("INGESTION_ADDR", "localhost:9000"),
 		BatchSize:     50,
 		FlushInterval: time.Second,
 		StaticLabels:  map[string]string{"environment": "dev"},
@@ -51,4 +52,11 @@ func main() {
 	if err := client.Run(ctx); err != nil && ctx.Err() == nil {
 		log.Fatalf("logflux agent: %v", err)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }

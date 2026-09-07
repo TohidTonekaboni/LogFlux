@@ -36,7 +36,10 @@ func main() {
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		log.Println("logflux ingestion metrics listening on :2112/metrics")
+		http.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		log.Println("logflux ingestion metrics listening on :2112 (/metrics, /healthz)")
 		if err := http.ListenAndServe(":2112", nil); err != nil {
 			log.Printf("logflux ingestion: metrics server: %v", err)
 		}
