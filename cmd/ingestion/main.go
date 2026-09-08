@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net"
 	"net/http"
@@ -9,8 +10,10 @@ import (
 
 	"github.com/TohidTonekaboni/LogFlux/internal/ingestion"
 	"github.com/TohidTonekaboni/LogFlux/internal/kafka"
+	"github.com/TohidTonekaboni/LogFlux/internal/tracing"
 	logfluxv1 "github.com/TohidTonekaboni/LogFlux/proto/logflux/v1"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 )
 
@@ -20,6 +23,17 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		selfCheck("http://localhost:2112/healthz")
 	}
+
+	ctx := context.Background()
+	shutdownTracing, err := tracing.Init(ctx, "logflux-ingestion", getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"))
+	if err != nil {
+		log.Fatalf("logflux ingestion: tracing init: %v", err)
+	}
+	defer func() {
+		if err := shutdownTracing(context.Background()); err != nil {
+			log.Printf("logflux ingestion: tracing shutdown: %v", err)
+		}
+	}()
 
 	brokers := strings.Split(getEnv("KAFKA_BROKERS", "localhost:9094,localhost:9095"), ",")
 
@@ -35,7 +49,7 @@ func main() {
 		log.Fatalf("logflux ingestion: listen: %v", err)
 	}
 
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.StatsHandler(otelgrpc.NewServerHandler()))
 	logfluxv1.RegisterLogIngestServer(srv, ingestion.NewServer(ingestion.NewKafkaSink(producer)))
 
 	go func() {

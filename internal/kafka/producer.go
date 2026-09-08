@@ -22,10 +22,11 @@ func NewProducer(brokers []string, topic string) *Producer {
 	}
 }
 
-func (p *Producer) Publish(ctx context.Context, key string, value []byte) error {
+func (p *Producer) Publish(ctx context.Context, key string, value []byte, headers ...kafka.Header) error {
 	return p.writer.WriteMessages(ctx, kafka.Message{
-		Key:   []byte(key),
-		Value: value,
+		Key:     []byte(key),
+		Value:   value,
+		Headers: headers,
 	})
 }
 

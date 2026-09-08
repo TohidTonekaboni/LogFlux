@@ -9,6 +9,9 @@ import (
 	"github.com/TohidTonekaboni/LogFlux/internal/kafka"
 	"github.com/TohidTonekaboni/LogFlux/internal/metrics"
 	logfluxv1 "github.com/TohidTonekaboni/LogFlux/proto/logflux/v1"
+	kafkago "github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -41,8 +44,18 @@ func (s *KafkaSink) Publish(ctx context.Context, entry *logfluxv1.LogEntry) erro
 		return err
 	}
 
+	// Inject the current trace context into Kafka message headers so the
+	// consumer can continue this same trace when it processes the entry
+	// (ARCHITECTURE.md Phase 7).
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	headers := make([]kafkago.Header, 0, len(carrier))
+	for k, v := range carrier {
+		headers = append(headers, kafkago.Header{Key: k, Value: []byte(v)})
+	}
+
 	start := time.Now()
-	err = s.producer.Publish(ctx, entry.GetServiceName(), value)
+	err = s.producer.Publish(ctx, entry.GetServiceName(), value, headers...)
 	metrics.KafkaPublishDuration.Observe(time.Since(start).Seconds())
 	return err
 }

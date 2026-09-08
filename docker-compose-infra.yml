@@ -287,6 +287,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
@@ -295,6 +296,7 @@ services:
     depends_on:
       - kafka-exporter
       - elasticsearch-exporter
+      - alertmanager
     networks:
       - log_flux_net
 
@@ -313,5 +315,31 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+    networks:
+      - log_flux_net
+
+  # ---------------------------------------------------------------------------
+  # Phase 7 stretch goals: distributed tracing (Jaeger, OTLP) and alerting
+  # (Alertmanager) on top of the Phase 5 Prometheus/Grafana stack.
+  # ---------------------------------------------------------------------------
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317"   # OTLP gRPC receiver
+    networks:
+      - log_flux_net
+
+  alertmanager:
+    <<: *mem-limit
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    volumes:
+      - ./infra/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
     networks:
       - log_flux_net

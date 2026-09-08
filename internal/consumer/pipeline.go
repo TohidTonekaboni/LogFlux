@@ -6,10 +6,18 @@ import (
 	"time"
 
 	"github.com/TohidTonekaboni/LogFlux/internal/metrics"
+	"github.com/TohidTonekaboni/LogFlux/internal/tracing"
 	logfluxv1 "github.com/TohidTonekaboni/LogFlux/proto/logflux/v1"
 	kafkago "github.com/segmentio/kafka-go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 )
+
+var tracer = tracing.Tracer("logflux/consumer")
 
 type Config struct {
 	IndexerWorkers int
@@ -42,8 +50,9 @@ func (c Config) withDefaults() Config {
 // the offset is committed only after the entry is durably indexed or routed
 // to the DLQ -- at-least-once delivery per §5.
 type record struct {
-	entry *logfluxv1.LogEntry
-	msg   kafkago.Message
+	entry   *logfluxv1.LogEntry
+	msg     kafkago.Message
+	spanCtx trace.SpanContext // continues the ingestion trace this entry started in
 }
 
 // MessageSource is the subset of *kafka.Consumer the pipeline needs.
@@ -59,7 +68,7 @@ type Indexer interface {
 
 // DLQPublisher routes entries that repeatedly fail indexing to logs.dlq.
 type DLQPublisher interface {
-	Publish(ctx context.Context, key string, value []byte) error
+	Publish(ctx context.Context, key string, value []byte, headers ...kafkago.Header) error
 }
 
 // Pipeline wires: per-partition dispatch -> per-partition normalize workers
@@ -133,15 +142,31 @@ func (p *Pipeline) normalize(ctx context.Context, ch <-chan kafkago.Message) {
 			if !ok {
 				return
 			}
+			carrier := propagation.MapCarrier{}
+			for _, h := range msg.Headers {
+				carrier[h.Key] = string(h.Value)
+			}
+			remoteCtx := otel.GetTextMapPropagator().Extract(ctx, carrier)
+
+			spanCtx, span := tracer.Start(remoteCtx, "consumer.normalize",
+				trace.WithAttributes(
+					attribute.Int("logflux.kafka_partition", msg.Partition),
+					attribute.Int64("logflux.kafka_offset", msg.Offset),
+				))
+
 			var entry logfluxv1.LogEntry
 			if err := proto.Unmarshal(msg.Value, &entry); err != nil {
 				log.Printf("logflux consumer: dropping unparseable message at %s/%d/%d: %v",
 					msg.Topic, msg.Partition, msg.Offset, err)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
+				span.End()
 				continue
 			}
+			span.End()
 
 			select {
-			case p.batchCh <- record{entry: &entry, msg: msg}:
+			case p.batchCh <- record{entry: &entry, msg: msg, spanCtx: trace.SpanContextFromContext(spanCtx)}:
 			case <-ctx.Done():
 				return
 			}
@@ -198,10 +223,22 @@ func (p *Pipeline) indexWorker(ctx context.Context) {
 func (p *Pipeline) processBatch(ctx context.Context, batch []record) {
 	entries := make([]*logfluxv1.LogEntry, len(batch))
 	msgs := make([]kafkago.Message, len(batch))
+	links := make([]trace.Link, 0, len(batch))
 	for i, r := range batch {
 		entries[i] = r.entry
 		msgs[i] = r.msg
+		if r.spanCtx.IsValid() {
+			links = append(links, trace.Link{SpanContext: r.spanCtx})
+		}
 	}
+
+	// A batch fans in entries from many independent traces, so it can't be a
+	// single parent-child chain -- Link each entry's trace instead, per
+	// OTel's guidance for batch/fan-in operations.
+	ctx, span := tracer.Start(ctx, "consumer.bulk_index",
+		trace.WithLinks(links...),
+		trace.WithAttributes(attribute.Int("logflux.batch_size", len(batch))))
+	defer span.End()
 
 	start := time.Now()
 	err := p.withRetries(ctx, entries)
@@ -209,6 +246,8 @@ func (p *Pipeline) processBatch(ctx context.Context, batch []record) {
 
 	if err != nil {
 		log.Printf("logflux consumer: batch failed after retries, routing %d entries to DLQ: %v", len(entries), err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		p.routeToDLQ(ctx, batch)
 		metrics.BulkIndexErrorsTotal.Add(float64(len(entries)))
 	} else {

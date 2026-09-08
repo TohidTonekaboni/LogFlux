@@ -14,6 +14,7 @@ import (
 	"github.com/TohidTonekaboni/LogFlux/internal/esclient"
 	"github.com/TohidTonekaboni/LogFlux/internal/kafka"
 	"github.com/TohidTonekaboni/LogFlux/internal/metrics"
+	"github.com/TohidTonekaboni/LogFlux/internal/tracing"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -30,6 +31,16 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	shutdownTracing, err := tracing.Init(ctx, "logflux-consumer", getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"))
+	if err != nil {
+		log.Fatalf("logflux consumer: tracing init: %v", err)
+	}
+	defer func() {
+		if err := shutdownTracing(context.Background()); err != nil {
+			log.Printf("logflux consumer: tracing shutdown: %v", err)
+		}
+	}()
 
 	brokers := strings.Split(getEnv("KAFKA_BROKERS", "localhost:9094,localhost:9095"), ",")
 

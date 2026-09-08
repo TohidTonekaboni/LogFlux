@@ -1,0 +1,13 @@
+route:
+  receiver: default
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  # No real notification channel wired up yet -- alerts are visible in the
+  # Alertmanager UI (:9093) and API. Point this at a Slack webhook_configs /
+  # email_configs / pagerduty_configs receiver before relying on this for
+  # real incident response.
+  - name: default

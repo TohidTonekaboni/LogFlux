@@ -1,0 +1,52 @@
+groups:
+  - name: logflux
+    rules:
+      - alert: KafkaConsumerLagHigh
+        expr: consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka consumer lag is high ({{ $value }} messages)"
+          description: "logs.raw consumer lag has exceeded 1000 messages for 5+ minutes -- the consumer isn't keeping up with ingestion."
+
+      - alert: BulkIndexErrorRateHigh
+        expr: rate(bulk_index_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Elasticsearch bulk-index errors are occurring"
+          description: "{{ $value | printf \"%.2f\" }} entries/sec are failing indexing after retries and being routed to logs.dlq."
+
+      - alert: LogsRejectedRatioHigh
+        expr: |
+          (
+            rate(logs_rejected_total[5m])
+            /
+            (rate(logs_received_total[5m]) + rate(logs_rejected_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over 5% of incoming logs are failing validation"
+          description: "Rejected-log ratio is {{ $value | humanizePercentage }} over the last 5m -- check for a misbehaving client."
+
+      - alert: KafkaBrokerDown
+        expr: kafka_brokers < 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka cluster has fewer than 2 brokers"
+          description: "Only {{ $value }} broker(s) visible. This 2-node KRaft cluster has no controller-quorum fault tolerance even at full strength, so losing a broker is a critical availability risk."
+
+      - alert: ElasticsearchClusterRed
+        expr: elasticsearch_cluster_health_status{color="red"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Elasticsearch cluster status is RED"
+          description: "One or more primary shards are unassigned -- logs may not be queryable or durable right now."

@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       KAFKA_BROKERS: kafka-1:9092,kafka-2:9092
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "9000:9000"
       - "2112:2112"
@@ -24,6 +25,8 @@ services:
         condition: service_healthy
       kafka-topics-init:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_started
     networks:
       - log_flux_net
 
@@ -37,6 +40,7 @@ services:
       ELASTICSEARCH_URL: http://elasticsearch:9200
       ES_USER: ${ES_USER}
       ES_PASSWORD: ${ES_PASSWORD}
+      OTEL_EXPORTER_OTLP_ENDPOINT: jaeger:4317
     ports:
       - "2113:2113"
     healthcheck:
@@ -53,6 +57,8 @@ services:
         condition: service_completed_successfully
       es-setup:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_started
     networks:
       - log_flux_net
 

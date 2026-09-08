@@ -87,7 +87,9 @@ Once `ingestion`, `consumer`, and `api` show `(healthy)`, the stack is ready.
 | REST API | http://localhost:8081 | `/logs`, `/logs/:id`, `/services`, `/healthz`, `/metrics` |
 | Kibana | http://localhost:5601 | login `elastic` / `$ELASTIC_PASSWORD` (see `.env`) |
 | Grafana | http://localhost:3000 | login `admin` / `$GRAFANA_ADMIN_PASSWORD` (see `.env`); dashboards under the "LogFlux" folder |
-| Prometheus | http://localhost:9090 | raw metrics/targets |
+| Prometheus | http://localhost:9090 | raw metrics/targets/alert rules |
+| Alertmanager | http://localhost:9093 | active alerts (no notification channel wired up by default -- see `infra/prometheus/alertmanager.yml`) |
+| Jaeger | http://localhost:16686 | distributed traces across `logflux-ingestion` -> `logflux-consumer` |
 | Kafka UI | http://localhost:8080 | inspect `logs.raw`/`logs.dlq` topics, partitions, consumer group lag |
 | Ingestion gRPC | localhost:9000 | `LogIngest.StreamLogs` |
 
