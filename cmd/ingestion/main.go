@@ -17,6 +17,10 @@ import (
 const logsRawTopic = "logs.raw"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		selfCheck("http://localhost:2112/healthz")
+	}
+
 	brokers := strings.Split(getEnv("KAFKA_BROKERS", "localhost:9094,localhost:9095"), ",")
 
 	producer := kafka.NewProducer(brokers, logsRawTopic)
@@ -56,4 +60,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// selfCheck lets the container's own binary serve as its Docker HEALTHCHECK
+// (`ingestion healthcheck`), since the runtime image has no shell/curl/wget.
+func selfCheck(url string) {
+	resp, err := http.Get(url) //nolint:gosec // fixed localhost URL, not user input
+	if err != nil || resp.StatusCode != http.StatusOK {
+		os.Exit(1)
+	}
+	_ = resp.Body.Close()
+	os.Exit(0)
 }

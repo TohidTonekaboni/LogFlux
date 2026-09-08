@@ -13,7 +13,7 @@ services:
       - "9000:9000"
       - "2112:2112"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:2112/healthz"]
+      test: ["CMD", "/usr/local/bin/ingestion", "healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -40,7 +40,7 @@ services:
     ports:
       - "2113:2113"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:2113/healthz"]
+      test: ["CMD", "/usr/local/bin/consumer", "healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -69,7 +69,7 @@ services:
     ports:
       - "8081:8081"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      test: ["CMD", "/usr/local/bin/api", "healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 10

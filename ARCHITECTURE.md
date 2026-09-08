@@ -302,8 +302,6 @@ logflux/
 
 ### Phase 7 — Stretch Goals (optional, post-v1)
 - OpenTelemetry tracing across ingestion → consumer → storage.
-- Kubernetes/Helm deployment option.
-- Cold-storage tiering (S3) via ILM.
 - Alerting rules (Prometheus Alertmanager) for lag/error thresholds.
 
 ---

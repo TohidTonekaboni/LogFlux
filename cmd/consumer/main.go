@@ -24,6 +24,10 @@ const (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		selfCheck("http://localhost:2113/healthz")
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -89,4 +93,15 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// selfCheck lets the container's own binary serve as its Docker HEALTHCHECK
+// (`consumer healthcheck`), since the runtime image has no shell/curl/wget.
+func selfCheck(url string) {
+	resp, err := http.Get(url) //nolint:gosec // fixed localhost URL, not user input
+	if err != nil || resp.StatusCode != http.StatusOK {
+		os.Exit(1)
+	}
+	_ = resp.Body.Close()
+	os.Exit(0)
 }
